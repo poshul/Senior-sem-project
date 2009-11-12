@@ -1,0 +1,44 @@
+Program Plan
+
+Client:
+• Starts and opens up a socket to listen
+• while socket is connected:
+∘ receive time on socket
+∘ compare time to previously received time
+‣ if they are close enough continue
+‣ else send "FAIL" to server
+∘ send "received" to server
+• If socket connection fails listen for new connection
+
+Server initialization:
+• Server 1 gets arguments of its priority (1), the client's IP, and the number of servers. Server 1 gets arguments of its priority (1), the client's IP and the number of servers,
+• Other servers get their priority and the IP of server 1
+• Server 1 opens a socket and listens for other servers.  Each other server sends their priority.
+• Server 1 creates a dict of IPs and priorities.
+• Once all of the servers are connected to server 1 it sends the dict to server 2 as well as the client IP address.
+• Server 2 opens connections to servers 3 to N then tells server 1 that it is done
+• Server 1 then sends the dict and IP to the next server repeating until all servers are connected
+Server main loop:
+• Actual time segment
+∘ read the system clock
+∘ Check against previous clock
+∘ store consistency
+• Time quorum segment
+∘ send time to all servers
+∘ receive time from all servers
+‣ Note if a server fails to send you time within socket timeout or if socket connection fails
+∘ send OK to all matching servers
+∘ Send FAIL to others
+• Consistency check segment
+∘ Listen for FAILs
+∘ IF more than half of other servers send you a fail, or if you failed a consistency check send everyone a message saying that you are dying
+‣ Note if a server fails to send OK or fail
+∘ Listen for dying messages, update dict of active servers
+• MIA segment
+∘ If you have received neither a time nor an OK/ FAIL message send a fail? message to all machines
+∘ tally fail? messages received, if more than half agree close socket to failed system and remove it from active dict
+∘ Possible problem with consistency here
+• Switchover segment
+∘ if server there are no active priority numbers between the dying server and you, become active
+• Send segment
+∘ If you are active send time to client
