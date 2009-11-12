@@ -1,3 +1,4 @@
+
 import socket
 import time
 import sys
@@ -60,8 +61,23 @@ def initializeprimary(priority, numservers):
             w=w+1
         priordict[instancedict[y]].send("dictdone") #send that we have finished the dict to the server with priority y
     #tell everyone to move on
-    for p in instancedict: #start propagating the list of other servers to each other server
-        priordict[instancedict[p]].send("moveon")
+    print "instancedict",instancedict
+    #merge the dicts
+    for k in priordict:
+        for j in instancedict:
+            if instancedict[j]==k:
+                instancedict[j]=priordict[k]
+    priordict=instancedict
+    print "instancedict2",instancedict
+    for i in priordict: #start propagating the list of other servers to each other server
+        print "entered asinine for loop" #temporary
+        try:
+            bytes=priordict[i].send("moveon")
+            print "sent",bytes
+        except:
+            print "failure in sending moveon",sys.exc_info() #temporary
+            quit() #temporary
+    print "done initializing primary"
     return priordict
 
 def initializenotprimary(priority, primserv):
@@ -114,9 +130,10 @@ def initializenotprimary(priority, primserv):
                     elif innercom=="dictdone":
                         print "internal dictdone"
                         print priordict
-                        print instancedict
+#                        print instancedict
                         innerloop=False
                     elif innercom=="moveon": # if we get a moveon directly after a getdict
+                        print "got inner moveon"
                         innerloop=False
                         listenloop=False
             elif mastercom=="moveon": #if we get a moveon and we werent just in a get dict
@@ -128,22 +145,60 @@ def initializenotprimary(priority, primserv):
 def sendclienttime(cliip, now):
 # Send segment starts here
     try:
-        clientSocket.send ( now )
+        clientSocket.send (str( now )) #converts to a string
     except:
-        print "send fail"
+        print "send fail", sys.exc_info()
         quit()
     print "sent"
     try:
         clientSocket.recv(100) 
     except:
-        print "recv fail"
+        print "recv fail", sys.exc_info()
         quit()
 # Send segment ends here
 
 def readlocaltime(oldtime): # reads the system time and then compares it to 
-    now=time.strftime('%X')
+    #now=time.strftime('%X') #changed to ease comparisons
+    now=time.time()
+    if now-oldtime>10: #if time has changed too much
+        now=time.time() #try to read again
+        if now-oldtime>10: #we have tried and failed
+            print "time is wrong, quitting"
+            quit() # temporary, will be sending a failure message
+        # if it works on the second pass we continue
     print now
     return now
+
+def openclientsocket(cliip):
+    clientSocket = socket.socket (socket.AF_INET, socket.SOCK_STREAM )#will need to be conditional to being primary server 
+    clientSocket.connect(( cliip,2487)) #will need to take an arg from stdin 
+    return clientSocket
+
+def sendtimeall(now, priordict):
+    print "entered sendtimeall" #temporary
+    for x in priordict:
+        try:
+            priordict[x].send(str(now))
+            print "sent to ",x
+        except:
+            print sys.exc_info() #temporary
+            print "error in send time all" #temporary
+            quit() #temporary
+
+def receivetimeall(priordict):
+    print "entered receivetimeall" #temporary
+    returndict=dict()
+    print "priordict",priordict #temporary
+    for x in priordict:
+        print x 
+        try:
+            returndict[x]=priordict[x].recv(100)
+        except:
+            print sys.exc_info() #temporary
+            print "error in receivetimeall" #temporary
+            quit() #temporary
+    return returndict
+   
 
 
 
@@ -174,23 +229,29 @@ if priority==1:#from now on in the program we only care about our priority on a 
     active=True
 else:
     active=False
+time.sleep(5) #wait for all things to settle temporary solution
 
-now=time.strftime('%X') #here we prime now to use as oldtime for getting the time
+now=time.time() #changed to ease comparisons
+#now=time.strftime('%X') #here we prime now to use as oldtime for getting the time
 #at this point we enter into the loop
-
-if active: # if we are the primary server connect
-    clientSocket = socket.socket (socket.AF_INET, socket.SOCK_STREAM )#will need to be conditional to being primary server 
-    clientSocket.connect(( cliip,2487)) #will need to take an arg from stdin 
-#end initialization block
-
-#get time is here
+try: # takes exceptions in both broken sockets and ctrl-C
     while True:
+        if active: # if we are the primary server
+            try: #try to see if connection exists
+                print clientSocket #simple way to test existence, Temporary
+            except: # if it doesnt we open it
+                clientSocket = openclientsocket(cliip)
+#end initialization block
+#get time is here
         now=readlocaltime(now)
-# note that in function we have removed the wait
-        time.sleep(1)
-        print now
+        sendtimeall(now, priordict)
+        timedict=receivetimeall(priordict)
+        print timedict # temporary
 # end gettime
-
 # Send segment starts here
-        sendclienttime(cliip, now)
+        if active:    
+            sendclienttime(cliip, now)
 # End Send segment
+        time.sleep(1)
+except KeyboardInterrupt:
+    print "we were excepted by keyboard" # in future we do something here
