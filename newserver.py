@@ -1,3 +1,4 @@
+#Problem at line 191
 
 import socket
 import time
@@ -77,6 +78,7 @@ def initializeprimary(priority, numservers):
         except:
             print "failure in sending moveon",sys.exc_info() #temporary
             quit() #temporary
+        acknow(priordict[i])
     print "done initializing primary"
     return priordict
 
@@ -138,6 +140,7 @@ def initializenotprimary(priority, primserv):
                         listenloop=False
             elif mastercom=="moveon": #if we get a moveon and we werent just in a get dict
                 print "got moveon"
+                pr1socket.send("ack") #ack the moveon
                 listenloop=False
         print "startup done"
     return priordict
@@ -189,9 +192,10 @@ def receivetimeall(priordict):
     print "entered receivetimeall" #temporary
     returndict=dict()
     print "priordict",priordict #temporary
-    for x in priordict:
+    for x in priordict: # PROBLEM EXISTS HERE
         print x 
         try:
+#            print priordict[x].recv(100)
             returndict[x]=priordict[x].recv(100)
         except:
             print sys.exc_info() #temporary
@@ -229,7 +233,6 @@ if priority==1:#from now on in the program we only care about our priority on a 
     active=True
 else:
     active=False
-time.sleep(5) #wait for all things to settle temporary solution
 
 now=time.time() #changed to ease comparisons
 #now=time.strftime('%X') #here we prime now to use as oldtime for getting the time
