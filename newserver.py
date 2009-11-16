@@ -202,7 +202,12 @@ def receivetimeall(priordict):
             print "error in receivetimeall" #temporary
             quit() #temporary
     return returndict
-   
+
+def checktime(ourtime, theirtime):#checks times from other servers against this server, returning OK if the times are within 10 seconds and FAIL otherwise
+    if abs(ourtime-theirtime)>10:
+        return "FAIL"
+    else:
+        return "OK"
 
 
 
