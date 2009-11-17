@@ -1,0 +1,4 @@
+Time estimates for remaining tasks:
+Debug Time exchange: 2 hours
+Write functions for elective server retirement: 3 hours
+Modify recv and sends to update the dict on a broken pipe: 3 hours

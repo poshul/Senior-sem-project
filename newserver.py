@@ -229,6 +229,55 @@ def timeok(now, timedict, priordict): #takes a dictionary of times, and sockets,
             print "time ok problem",sys.exc_info() #temporary
             quit()
 
+def amiok(priordict): #takes the results of timeok, if more than half are fails return that you are going to die.
+    failnumber=0
+    for x in priordict:
+        thisresult
+        try:
+            thisresult=priordict[x].recv(100)
+        except:
+            print "amiokrecv problem",sys.exc_info() #temporary
+            quit()
+        if thisresult=="FAIL":
+            failnumber=failnumber+1
+    if failnumber>len(priordict):
+        return True
+    else:
+        return False
+
+def sendmessage(priordict,message): #sends a message to all connected servers
+    for x in priordict:
+        try:
+            priordict[x].send(message)
+        except:
+            print "failure to send message",sys.exc_info() #temporary
+            quit()
+
+def dealwithdeath(priordict,priority, active):
+    for x in priordict:
+        status
+        try:
+            status=priordict[x].recv(100)
+        except:
+            print "failure to receive death or life",sys.exc_info #temporary
+            quit()
+        if status=="dying":
+            intermediate=False #by default we assume there is no intermediate
+            itwasactive=True #we assume the dying server was active
+            for z in range(1,x):#we check to see if any higher priority servers than the current one exist
+                if x in priordict:
+                    intermediate=False
+                #can be made more efficent by short circuit will do if I get time temporary
+            for y in range(x+1,priority): #for all of the possible dicts in between the dying one and us
+                if y in priordict:#test to see if they are still alive
+                    intermediate=True # if so we have an intermediate
+            if intermediate==False and itwasactive==True:
+                active=True #if the failing server is the one before us and it was active we are active
+            del priordict[x]#we remove the failing server from our dictionary
+        return priordict, active #we return the modified (or not) priordict, and whether we are now active or not
+
+
+
 #arguments block
 print len(sys.argv)
 print sys.argv[1]
@@ -281,8 +330,18 @@ try: # takes exceptions in both broken sockets and ctrl-C
         endofsegment(priordict)
 #end checktime
 
+#consistency check is here
+        dying=amiok(priordict)
+        endofsegment(priordict)
+        if dying:
+            sendmessage(priordict,"dying")
+        else:
+            sendmessage(priordict,"alive")
+        priordict,active=dealwithdeath(priordict,priority,active)
+        
+
 # Send segment starts here
-        if active:    
+        if active:    #NEED TO CHANGE ORDER HERE
             sendclienttime(cliip, now)
 # End Send segment
         time.sleep(1)
