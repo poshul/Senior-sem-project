@@ -1,4 +1,3 @@
-#Problem at line 191
 
 import socket
 import time
@@ -11,6 +10,7 @@ import sys
 def acknow(thissock): #function for testing that the other server/client acknowldged correctly
     ack= thissock.recv(100)
     if ack!="ack":
+        print "failed acknowledgement",sys.exc_info()
         quit()
     return
 
@@ -203,13 +203,31 @@ def receivetimeall(priordict):
             quit() #temporary
     return returndict
 
+def endofsegment(priordict): #sends acks to all other servers, reads acks from all other servers
+    for x in priordict:
+        try:
+            priordict[x].send("ack")
+        except:
+            print "endofsegment problem",sys.exc_info() #temporary
+            quit()
+    for y in priordict:
+        try:
+            acknow(priordict[y])
+
+
 def checktime(ourtime, theirtime):#checks times from other servers against this server, returning OK if the times are within 10 seconds and FAIL otherwise
     if abs(ourtime-theirtime)>10:
         return "FAIL"
     else:
         return "OK"
 
-
+def timeok(now, timedict, priordict): #takes a dictionary of times, and sockets,m and the current time and sends whether the times gotten from each server are within 10 seconds of the current time
+    for x in priordict:
+        try:
+            priordict[x].send(checktime(now,timedict[x]))
+        except:
+            print "time ok problem",sys.exc_info() #temporary
+            quit()
 
 #arguments block
 print len(sys.argv)
@@ -254,8 +272,15 @@ try: # takes exceptions in both broken sockets and ctrl-C
         now=readlocaltime(now)
         sendtimeall(now, priordict)
         timedict=receivetimeall(priordict)
+        endofsegment(priordict)
         print timedict # temporary
 # end gettime
+
+#checktime is here
+        timeok(now,timedict,priordict)
+        endofsegment(priordict)
+#end checktime
+
 # Send segment starts here
         if active:    
             sendclienttime(cliip, now)
