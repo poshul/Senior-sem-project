@@ -249,7 +249,8 @@ def amiok(priordict): #takes the results of timeok, if more than half are fails 
         if thisresult=="FAIL":
             failnumber=failnumber+1
     print "failnumber", failnumber #temporary
-    if failnumber>len(priordict):
+    print "lendict",len(priordict)
+    if failnumber>(len(priordict)/2):
         print "Amiok true" #temporary
         return True
     else:
@@ -264,6 +265,8 @@ def sendmessage(priordict,message): #sends a message to all connected servers
             quit()
 
 def dealwithdeath(priordict,priority, active):
+#    copydict=priordict #make a copy of the dictionary so that we can modify it while iterating
+    dellist=[] #create an empty list to put the servers to delete in
     for x in priordict:
         status='' # temporary !!
         try:
@@ -284,8 +287,12 @@ def dealwithdeath(priordict,priority, active):
                     intermediate=True # if so we have an intermediate
             if intermediate==False and itwasactive==True:
                 active=True #if the failing server is the one before us and it was active we are active
-            del priordict[x]#we remove the failing server from our dictionary
-    return (priordict, active) #we return the modified (or not) priordict, and whether we are now active or not
+            dellist.append(x)
+    print "dellist",dellist #temporary
+    for y in dellist: #go through all the servers marked for deletion
+        del priordict[y]#we remove the failing server from our dictionary 
+    print "priordict",priordict #temporary
+    return (priordict, active) #we return the modified (or not) priordict, and whether we are now active or not 
 
 
 
@@ -295,12 +302,13 @@ print sys.argv[1]
 if len(sys.argv) == 4:# and sys.argv[1]==1: #if we are the 1st server we get our priority ie 1, the client IP and the total number of servers
     priority=int(sys.argv[1])
     cliip=sys.argv[2]
-    numservers=int(sys.argv[3])
-elif len(sys.argv) ==3: # if not the 1st server we only get our priority and the address of the 1st server
-    priority=int(sys.argv[1])
-    primserv=sys.argv[2]
+    if priority==1:
+        numservers=int(sys.argv[3])
+    else:
+        primserv=sys.argv[3]
 else:
-    print "usage"
+    print "usage: priority, clientIP, number of servers, IFF priority is 1"
+    print "priority, ClientIP, Primary server IP otherwise"
     quit()
 #end arguments block
 
@@ -353,7 +361,10 @@ try: # takes exceptions in both broken sockets and ctrl-C
             sendmessage(priordict,"alive")
 #        (priordict,active)=dealwithdeath(priordict, priority, active)
         if len(priordict)!=0: #deals with the issues returning an empty dict temporary
-            (priordict,active)=dealwithdeath(priordict,priority,active) #ISSUE IS HERE FUCKING IDIOT
+            (priordict,active)=dealwithdeath(priordict,priority,active)
+        if dying: #We actually die here if things fuck up
+            print "dying"
+            quit()
         time.sleep(1) #temporary !!
         endofsegment(priordict) #added cause we are at the end of a segment here
 # Send segment starts here
