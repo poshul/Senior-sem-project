@@ -9,8 +9,9 @@ import sys
 
 def acknow(thissock): #function for testing that the other server/client acknowldged correctly
     ack= thissock.recv(100)
+    print "ack", ack #temporary
     if ack!="ack":
-        print "failed acknowledgement",sys.exc_info()
+        print "failed acknowledgement, got:", ack, sys.exc_info()# temporary
         quit()
     return
 
@@ -204,19 +205,24 @@ def receivetimeall(priordict):
     return returndict
 
 def endofsegment(priordict): #sends acks to all other servers, reads acks from all other servers
+    print "entered end of segment" #temporary
     for x in priordict:
         try:
             priordict[x].send("ack")
+            print "sent ack to:",x #temporary
         except:
             print "endofsegment problem",sys.exc_info() #temporary
             quit()
     for y in priordict:
         try:
+            print "y",y #temporary
             acknow(priordict[y])
-
+        except:
+            print "endofsegment2 problem",sys.exc_info() #temporary
+    time.sleep(1) #FUCKING SHITTY SOLUTION
 
 def checktime(ourtime, theirtime):#checks times from other servers against this server, returning OK if the times are within 10 seconds and FAIL otherwise
-    if abs(ourtime-theirtime)>10:
+    if abs(ourtime-float(theirtime))>10: #cast theirtime as a float
         return "FAIL"
     else:
         return "OK"
@@ -231,16 +237,20 @@ def timeok(now, timedict, priordict): #takes a dictionary of times, and sockets,
 
 def amiok(priordict): #takes the results of timeok, if more than half are fails return that you are going to die.
     failnumber=0
+    print "entered amiok" # temporary
     for x in priordict:
-        thisresult
+        thisresult='' #temporary !!
         try:
             thisresult=priordict[x].recv(100)
+            print "thisresult",thisresult
         except:
             print "amiokrecv problem",sys.exc_info() #temporary
             quit()
         if thisresult=="FAIL":
             failnumber=failnumber+1
+        print "failnumber", failnumber #temporary
     if failnumber>len(priordict):
+        print "Amiok true" #temporary
         return True
     else:
         return False
@@ -255,7 +265,7 @@ def sendmessage(priordict,message): #sends a message to all connected servers
 
 def dealwithdeath(priordict,priority, active):
     for x in priordict:
-        status
+        status='' # temporary !!
         try:
             status=priordict[x].recv(100)
         except:
@@ -274,7 +284,7 @@ def dealwithdeath(priordict,priority, active):
             if intermediate==False and itwasactive==True:
                 active=True #if the failing server is the one before us and it was active we are active
             del priordict[x]#we remove the failing server from our dictionary
-        return priordict, active #we return the modified (or not) priordict, and whether we are now active or not
+        return (priordict, active) #we return the modified (or not) priordict, and whether we are now active or not
 
 
 
@@ -311,36 +321,43 @@ now=time.time() #changed to ease comparisons
 #at this point we enter into the loop
 try: # takes exceptions in both broken sockets and ctrl-C
     while True:
-        if active: # if we are the primary server
-            try: #try to see if connection exists
-                print clientSocket #simple way to test existence, Temporary
-            except: # if it doesnt we open it
-                clientSocket = openclientsocket(cliip)
+# client connect changed to be after possible active server change in dealwithdeath
 #end initialization block
 #get time is here
         now=readlocaltime(now)
         sendtimeall(now, priordict)
         timedict=receivetimeall(priordict)
+        print "timedict",timedict # temporary
+        time.sleep(1) # temporary !!
         endofsegment(priordict)
-        print timedict # temporary
 # end gettime
 
 #checktime is here
+        print "started checktime" #temporary
         timeok(now,timedict,priordict)
-        endofsegment(priordict)
+#        endofsegment(priordict) #shouldnt be here we have unresolved items in the socket
 #end checktime
 
 #consistency check is here
         dying=amiok(priordict)
+        time.sleep(1) #temporary !!
         endofsegment(priordict)
+        print "did consistancy check.  I am:", dying #temporary
         if dying:
             sendmessage(priordict,"dying")
         else:
             sendmessage(priordict,"alive")
-        priordict,active=dealwithdeath(priordict,priority,active)
-        
-
+#        (priordict,active)=dealwithdeath(priordict, priority, active)
+        if len(priordict)!=0: #deals with the issues returning an empty dict temporary
+            (priordict,active)=dealwithdeath(priordict,priority,active)
+        time.sleep(1) #temporary !!
+        endofsegment(priordict) #added cause we are at the end of a segment here
 # Send segment starts here
+        if active: # if we are the primary server
+            try: #try to see if connection exists
+                print clientSocket #simple way to test existence, Temporary
+            except: # if it doesnt we open it
+                clientSocket = openclientsocket(cliip)
         if active:    #NEED TO CHANGE ORDER HERE
             sendclienttime(cliip, now)
 # End Send segment
