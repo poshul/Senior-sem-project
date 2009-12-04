@@ -8,7 +8,7 @@ import sys
 
 
 def acknow(thissock): #function for testing that the other server/client acknowldged correctly
-    ack= thissock.recv(100)
+    ack= thissock.recv(3) #just read what would be the ack
     print "ack", ack #temporary
     if ack!="ack":
         print "failed acknowledgement, got:", ack, sys.exc_info()# temporary
@@ -155,7 +155,7 @@ def sendclienttime(cliip, now):
         quit()
     print "sent"
     try:
-        clientSocket.recv(100) 
+        clientSocket.recv(10) 
     except:
         print "recv fail", sys.exc_info()
         quit()
@@ -197,7 +197,7 @@ def receivetimeall(priordict):
         print x 
         try:
 #            print priordict[x].recv(100)
-            returndict[x]=priordict[x].recv(100)
+            returndict[x]=priordict[x].recv(10)
         except:
             print sys.exc_info() #temporary
             print "error in receivetimeall" #temporary
@@ -219,7 +219,7 @@ def endofsegment(priordict): #sends acks to all other servers, reads acks from a
             acknow(priordict[y])
         except:
             print "endofsegment2 problem",sys.exc_info() #temporary
-    time.sleep(1) #FUCKING SHITTY SOLUTION
+#    time.sleep(1) #FUCKING SHITTY SOLUTION
 
 def checktime(ourtime, theirtime):#checks times from other servers against this server, returning OK if the times are within 10 seconds and FAIL otherwise
     if abs(ourtime-float(theirtime))>10: #cast theirtime as a float
@@ -241,14 +241,14 @@ def amiok(priordict): #takes the results of timeok, if more than half are fails 
     for x in priordict:
         thisresult='' #temporary !!
         try:
-            thisresult=priordict[x].recv(100)
+            thisresult=priordict[x].recv(10)
             print "thisresult",thisresult
         except:
             print "amiokrecv problem",sys.exc_info() #temporary
             quit()
         if thisresult=="FAIL":
             failnumber=failnumber+1
-        print "failnumber", failnumber #temporary
+    print "failnumber", failnumber #temporary
     if failnumber>len(priordict):
         print "Amiok true" #temporary
         return True
@@ -267,7 +267,8 @@ def dealwithdeath(priordict,priority, active):
     for x in priordict:
         status='' # temporary !!
         try:
-            status=priordict[x].recv(100)
+            status=priordict[x].recv(10)
+            print "status",status
         except:
             print "failure to receive death or life",sys.exc_info #temporary
             quit()
@@ -284,7 +285,7 @@ def dealwithdeath(priordict,priority, active):
             if intermediate==False and itwasactive==True:
                 active=True #if the failing server is the one before us and it was active we are active
             del priordict[x]#we remove the failing server from our dictionary
-        return (priordict, active) #we return the modified (or not) priordict, and whether we are now active or not
+    return (priordict, active) #we return the modified (or not) priordict, and whether we are now active or not
 
 
 
@@ -325,6 +326,7 @@ try: # takes exceptions in both broken sockets and ctrl-C
 #end initialization block
 #get time is here
         now=readlocaltime(now)
+        now=int(now) #Get rid of decimal
         sendtimeall(now, priordict)
         timedict=receivetimeall(priordict)
         print "timedict",timedict # temporary
@@ -340,8 +342,10 @@ try: # takes exceptions in both broken sockets and ctrl-C
 
 #consistency check is here
         dying=amiok(priordict)
-        time.sleep(1) #temporary !!
         endofsegment(priordict)
+        time.sleep(1) #temporary !!
+        print "priordict", priordict #temporary
+        endofsegment(priordict) #temporary
         print "did consistancy check.  I am:", dying #temporary
         if dying:
             sendmessage(priordict,"dying")
@@ -349,7 +353,7 @@ try: # takes exceptions in both broken sockets and ctrl-C
             sendmessage(priordict,"alive")
 #        (priordict,active)=dealwithdeath(priordict, priority, active)
         if len(priordict)!=0: #deals with the issues returning an empty dict temporary
-            (priordict,active)=dealwithdeath(priordict,priority,active)
+            (priordict,active)=dealwithdeath(priordict,priority,active) #ISSUE IS HERE FUCKING IDIOT
         time.sleep(1) #temporary !!
         endofsegment(priordict) #added cause we are at the end of a segment here
 # Send segment starts here
