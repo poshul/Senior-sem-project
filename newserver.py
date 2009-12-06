@@ -8,7 +8,11 @@ import sys
 
 
 def acknow(thissock): #function for testing that the other server/client acknowldged correctly
-    ack= thissock.recv(3) #just read what would be the ack
+    try:
+        ack= thissock.recv(3) #just read what would be the acknowldged
+    except socket.error:
+        print "socket error in acknow"
+        quit()
     print "ack", ack #temporary
     if ack!="ack":
         print "failed acknowledgement, got:", ack, sys.exc_info()# temporary
@@ -72,11 +76,11 @@ def initializeprimary(priority, numservers):
     priordict=instancedict
     print "instancedict2",instancedict
     for i in priordict: #start propagating the list of other servers to each other server
-        print "entered asinine for loop" #temporary
+#        print "entered asinine for loop" #temporary
         try:
             bytes=priordict[i].send("moveon")
             print "sent",bytes
-        except:
+        except socket.error:
             print "failure in sending moveon",sys.exc_info() #temporary
             quit() #temporary
         acknow(priordict[i])
@@ -219,7 +223,8 @@ def endofsegment(priordict): #sends acks to all other servers, reads acks from a
             acknow(priordict[y])
         except:
             print "endofsegment2 problem",sys.exc_info() #temporary
-#    time.sleep(1) #FUCKING SHITTY SOLUTION
+            quit()
+
 
 def checktime(ourtime, theirtime):#checks times from other servers against this server, returning OK if the times are within 10 seconds and FAIL otherwise
     if abs(ourtime-float(theirtime))>10: #cast theirtime as a float
@@ -265,7 +270,6 @@ def sendmessage(priordict,message): #sends a message to all connected servers
             quit()
 
 def dealwithdeath(priordict,priority, active):
-#    copydict=priordict #make a copy of the dictionary so that we can modify it while iterating
     dellist=[] #create an empty list to put the servers to delete in
     for x in priordict:
         status='' # temporary !!
@@ -313,7 +317,6 @@ else:
 #end arguments block
 
 #initialization block
-
 if priority==1: #do if we are the primary server
     priordict=initializeprimary(priority, numservers)
 else: # if not the primary server
@@ -379,3 +382,4 @@ try: # takes exceptions in both broken sockets and ctrl-C
         time.sleep(1)
 except KeyboardInterrupt:
     print "we were excepted by keyboard" # in future we do something here
+    quit()
