@@ -11,12 +11,18 @@ def acknow(thissock): #function for testing that the other server/client acknowl
     try:
         ack= thissock.recv(3) #just read what would be the acknowldged
     except socket.error:
-        print "socket error in acknow"
-        quit()
+        print "socket error in acknow", sys.exc_info()
+        return "DIED"
+#        quit()
     print "ack", ack #temporary
-    if ack!="ack":
+    if ack!="ack":# we now have a special case for if we didnt get anything
         print "failed acknowledgement, got:", ack, sys.exc_info()# temporary
-        quit()
+        if ack=="":
+            print "we got nothing"
+            return "DIED"
+        else:
+            quit()
+#        quit()
     return
 
 def initializeprimary(priority, numservers):
@@ -183,17 +189,23 @@ def openclientsocket(cliip):
     return clientSocket
 
 def sendtimeall(now, priordict):
+    mialist=[]
     print "entered sendtimeall" #temporary
     for x in priordict:
         try:
             priordict[x].send(str(now))
             print "sent to ",x
+        except socket.error:
+            print "we have a server mia adding to list"
+            mialist.append(x)
         except:
             print sys.exc_info() #temporary
             print "error in send time all" #temporary
             quit() #temporary
+    return mialist
 
 def receivetimeall(priordict):
+    mialist=[]
     print "entered receivetimeall" #temporary
     returndict=dict()
     print "priordict",priordict #temporary
@@ -202,52 +214,72 @@ def receivetimeall(priordict):
         try:
 #            print priordict[x].recv(100)
             returndict[x]=priordict[x].recv(10)
+        except socket.error:
+            print "we have a server missing in receivetimeall adding to list"
+            mialist.append(x)
         except:
             print sys.exc_info() #temporary
             print "error in receivetimeall" #temporary
             quit() #temporary
-    return returndict
+    return (returndict, mialist)
 
 def endofsegment(priordict): #sends acks to all other servers, reads acks from all other servers
+    mialist=[]
     print "entered end of segment" #temporary
     for x in priordict:
         try:
             priordict[x].send("ack")
             print "sent ack to:",x #temporary
+        except socket.error:
+            print "error sending in end of segment marking server as bad"
+            mialist.append(x)
         except:
             print "endofsegment problem",sys.exc_info() #temporary
             quit()
     for y in priordict:
         try:
             print "y",y #temporary
-            acknow(priordict[y])
+            amok=acknow(priordict[y])
+            if amok=="DIED":
+                print "I think it died adding to list of mia"
+                mialist.append(y)
         except:
             print "endofsegment2 problem",sys.exc_info() #temporary
             quit()
-
+    return mialist
+            
 
 def checktime(ourtime, theirtime):#checks times from other servers against this server, returning OK if the times are within 10 seconds and FAIL otherwise
-    if abs(ourtime-float(theirtime))>10: #cast theirtime as a float
+    if theirtime=='' or abs(ourtime-float(theirtime))>10: #cast theirtime as a float and say fail if theirtime is blank
         return "FAIL"
     else:
         return "OK"
 
 def timeok(now, timedict, priordict): #takes a dictionary of times, and sockets,m and the current time and sends whether the times gotten from each server are within 10 seconds of the current time
+    mialist=[]
     for x in priordict:
         try:
             priordict[x].send(checktime(now,timedict[x]))
+        except socket.error:
+            print "time ok socket error, adding to list"
+            mialist.append(x)
         except:
             print "time ok problem",sys.exc_info() #temporary
             quit()
+    return mialist
 
 def amiok(priordict): #takes the results of timeok, if more than half are fails return that you are going to die.
     failnumber=0
+    mialist=[]
     print "entered amiok" # temporary
     for x in priordict:
         thisresult='' #temporary !!
         try:
             thisresult=priordict[x].recv(10)
             print "thisresult",thisresult
+        except socket.error:
+            print "amiok socket problem adding to list"
+            mialist.append(x)
         except:
             print "amiokrecv problem",sys.exc_info() #temporary
             quit()
@@ -257,47 +289,157 @@ def amiok(priordict): #takes the results of timeok, if more than half are fails 
     print "lendict",len(priordict)
     if failnumber>(len(priordict)/2):
         print "Amiok true" #temporary
-        return True
+        return (True,mialist)
     else:
-        return False
+        return (False,mialist)
 
 def sendmessage(priordict,message): #sends a message to all connected servers
+    mialist=[]
     for x in priordict:
         try:
             priordict[x].send(message)
+        except socket.error:
+            print "sendmessage socket error"
+            mialist.append(x)
         except:
-            print "failure to send message",sys.exc_info() #temporary
+            print "failure to send message",message, sys.exc_info() #temporary
             quit()
+    return mialist
 
 def dealwithdeath(priordict,priority, active):
     dellist=[] #create an empty list to put the servers to delete in
+    mialist=[]
     for x in priordict:
         status='' # temporary !!
         try:
             status=priordict[x].recv(10)
             print "status",status
+        except socket.error:
+            print "socket error in dealwithdeath"
+            mialist.append(x)
         except:
             print "failure to receive death or life",sys.exc_info #temporary
             quit()
-        if status=="dying":
-            intermediate=False #by default we assume there is no intermediate
-            itwasactive=True #we assume the dying server was active
-            for z in range(1,x):#we check to see if any higher priority servers than the current one exist
-                if x in priordict:
-                    intermediate=False
+        if status=="dying": #need to fix where the try except is in next pass
+            if x<priority: #there is no way that we would change active state if we have a higher priority that the failing system
+                intermediate=False #by default we assume there is no intermediate
+                itwasactive=True #we assume the dying server was active
+                for z in range(1,x):#we check to see if any higher priority servers than the current one exist
+                    if x in priordict:
+                        itwasactive=False
                 #can be made more efficent by short circuit will do if I get time temporary
-            for y in range(x+1,priority): #for all of the possible dicts in between the dying one and us
-                if y in priordict:#test to see if they are still alive
-                    intermediate=True # if so we have an intermediate
-            if intermediate==False and itwasactive==True:
-                active=True #if the failing server is the one before us and it was active we are active
+                for y in range(x+1,priority): #for all of the possible dicts in between the dying one and us
+                    if y in priordict:#test to see if they are still alive
+                        intermediate=True # if so we have an intermediate
+                if intermediate==False and itwasactive==True:
+                    active=True #if the failing server is the one before us and it was active we are active
             dellist.append(x)
     print "dellist",dellist #temporary
     for y in dellist: #go through all the servers marked for deletion
         del priordict[y]#we remove the failing server from our dictionary 
     print "priordict",priordict #temporary
-    return (priordict, active) #we return the modified (or not) priordict, and whether we are now active or not 
+    return (priordict, active,mialist) #we return the modified (or not) priordict, and whether we are now active or not 
 
+# currently only definately deals with one failing server in a segment 
+def miaresolve(priordict, missinglist,priority,active):
+    dellist=[]
+    for z in missinglist:
+        numinagreement=0 # we reset this at the top of each entry
+        numitsdead=0 #reset this too
+        # start discover
+        for x in priordict:
+            try:
+                priordict[x].send(str(z))
+            except socket.error:
+                print "we ignore send errors here" #since we are already aware of failure we ignore errors here
+            except:
+                print "something wrong in MIA resolve send", sys.exc_info()
+                quit()
+        for y in priordict:
+            try:
+                ourrecv=priordict[y].recv(8)
+            except socket.error:
+                print "not much to see here"
+            except:
+                "something wrong in miaresolve", sys.exc_info()
+                quit()
+            print "ourrecv",ourrecv #temporary
+            print "z",z
+            if ourrecv!='' and int(ourrecv)==z: # if the number to deactivate that we receive agrees with ours, modified to short circuit if we have received nothing
+                numinagreement=numinagreement+1
+        # end discover
+        # start agree
+        print "numinagreement", numinagreement
+        if numinagreement>=len(priordict)-len(missinglist): # if we received agreement for all servers whose integrity is not in question
+            for w in priordict:
+                try:
+                    priordict[w].send("itsdead")
+                except socket.error:
+                    print "socket problem in agree segment, big suprise"
+                except:
+                    print "error in sending itsdead", sys.exc_info()
+                    quit()
+            for v in priordict:
+                print "entering receiving itsdeads"
+                try:
+                    thisdead=priordict[v].recv(10)
+                    print "thisdead", thisdead
+                except socket.error:
+                    print "socket error recv in agree segment, not a problem"
+                except:
+                    print "other error in recv of agree segment", sys.exc_info()
+                    quit()
+                print "thisdead", thisdead
+                if thisdead=="itsdead":
+                    numitsdead=numitsdead+1
+                    print "itsdead+1"
+        else:
+            for w in priordict:
+                try:
+                    priordict[w].send("notdead")
+                except socket.error:
+                    print "socket error sending not dead"
+                except:
+                    print "other error in sending not dead", sys.exc_info()
+                    quit()
+            for v in priordict:
+                try:
+                    priordict[v].recv(10)
+                except socket.error:
+                    print "socket error receiving while not dead"
+                except:
+                    print "other error receiving in not dead",sys.exc_info()
+                    quit()
+        #end agree
+        print "numitsdead",numitsdead
+        if numitsdead>=len(priordict)-len(missinglist):
+            print "we will delete server with priority ",z, " now"
+            if z<priority:
+                intermediate=False #by default we assume there is no intermediate
+                itwasactive=True #we assume the dying server was active
+                for t in range(1,z):
+                    if t in priordict:
+                        itwasactive=False
+                for s in range(z+1,priority):
+                    if s in priordict:
+                        intermediate=True
+                if intermediate==False and itwasactive==True:
+                    active=True
+            dellist.append(z)
+            #to be implemented
+    for u in dellist:
+        del priordict[u]
+    return (priordict,active)
+    
+
+# from: http://www.testingreflections.com/node/view/5241
+# removes duplicate items from a list
+def remove_dups(seq):
+    x = {}
+    for y in seq:
+        x[y] = 1
+    u = x.keys()
+    return u 
 
 
 #arguments block
@@ -323,6 +465,15 @@ else: # if not the primary server
     priordict=initializenotprimary(priority,primserv)
 print priordict #temporary
 
+# we set the timeout of each socket here
+for x in priordict:
+    priordict[x].settimeout(5)
+# end setting the timeouts
+
+#test that all of the timeouts are correct temporary
+for y in priordict:
+    print "timeout is",priordict[y].gettimeout()
+
 if priority==1:#from now on in the program we only care about our priority on a failover otherwise we care whether we are active or not.
     active=True
 else:
@@ -336,40 +487,52 @@ try: # takes exceptions in both broken sockets and ctrl-C
 # client connect changed to be after possible active server change in dealwithdeath
 #end initialization block
 #get time is here
+        masterMIAlist=[] #initialize the list as empty at the top of every loop
+        tempMIAlist=[]
         now=readlocaltime(now)
         now=int(now) #Get rid of decimal
-        sendtimeall(now, priordict)
-        timedict=receivetimeall(priordict)
+        masterMIAlist.extend(sendtimeall(now, priordict))
+        (timedict,tempMIAlist)=receivetimeall(priordict)
+        masterMIAlist.extend(tempMIAlist)
         print "timedict",timedict # temporary
         time.sleep(1) # temporary !!
-        endofsegment(priordict)
+        masterMIAlist.extend(endofsegment(priordict))
 # end gettime
 
 #checktime is here
         print "started checktime" #temporary
-        timeok(now,timedict,priordict)
+        masterMIAlist.extend(timeok(now,timedict,priordict))
 #        endofsegment(priordict) #shouldnt be here we have unresolved items in the socket
 #end checktime
 
 #consistency check is here
-        dying=amiok(priordict)
-        endofsegment(priordict)
+        (dying,tempMIAlist)=amiok(priordict)
+        masterMIAlist.extend(tempMIAlist)
+        masterMIAlist.extend(endofsegment(priordict))
+        print "eoslist2",masterMIAlist #temporary
         time.sleep(1) #temporary !!
         print "priordict", priordict #temporary
-        endofsegment(priordict) #temporary
+        masterMIAlist.extend(endofsegment(priordict)) #temporary
+        print "eoslist3",masterMIAlist #temporary
         print "did consistancy check.  I am:", dying #temporary
         if dying:
-            sendmessage(priordict,"dying")
+            masterMIAlist.extend(sendmessage(priordict,"dying"))
         else:
-            sendmessage(priordict,"alive")
-#        (priordict,active)=dealwithdeath(priordict, priority, active)
+            masterMIAlist.extend(sendmessage(priordict,"alive"))
         if len(priordict)!=0: #deals with the issues returning an empty dict temporary
-            (priordict,active)=dealwithdeath(priordict,priority,active)
+            (priordict,active,tempMIAlist)=dealwithdeath(priordict,priority,active) #tempeos here
+        masterMIAlist.extend(tempMIAlist)
         if dying: #We actually die here if things fuck up
             print "dying"
             quit()
         time.sleep(1) #temporary !!
-        endofsegment(priordict) #added cause we are at the end of a segment here
+        masterMIAlist.extend(endofsegment(priordict)) #added cause we are at the end of a segment here
+        masterMIAlist=remove_dups(masterMIAlist) #remove duplicate items
+        print "eoslist4", masterMIAlist #temporary
+        if len(masterMIAlist)>0: #temporary
+            print "we have things to fix"
+            (priordict,active)=miaresolve(priordict,masterMIAlist,priority,active)
+            #quit() #temporary
 # Send segment starts here
         if active: # if we are the primary server
             try: #try to see if connection exists
